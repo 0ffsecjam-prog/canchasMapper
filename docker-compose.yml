@@ -1,0 +1,15 @@
+services:
+  canchasmapper:
+    build: .
+    container_name: canchasmapper
+    restart: unless-stopped
+    ports:
+      - "8080:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin1234}
+      - SESSION_SECRET=${SESSION_SECRET:-cambiame-en-produccion}

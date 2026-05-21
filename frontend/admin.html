@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · canchasMapper</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <div id="login-screen" class="centered hidden">
+    <form id="login-form" class="card">
+      <h1>🔒 canchasMapper · admin</h1>
+      <p>Ingresá la contraseña de administrador.</p>
+      <input id="login-password" type="password" placeholder="Password" autocomplete="current-password" required>
+      <button type="submit" class="btn-primary">Ingresar</button>
+      <div id="login-error" class="error hidden"></div>
+      <p class="hint">Por defecto: <code>admin1234</code> — cambialo desde acá o seteando <code>ADMIN_PASSWORD</code>.</p>
+    </form>
+  </div>
+
+  <div id="admin-screen" class="hidden">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">⚙️</span>
+        <strong>canchasMapper · Admin</strong>
+      </div>
+      <div class="topbar-actions">
+        <a href="/" class="btn-ghost">Volver al mapa</a>
+        <button id="logout-btn" class="btn-ghost">Salir</button>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <section class="card">
+        <h2>API keys</h2>
+        <p class="hint">Las keys se guardan en la base local (SQLite) y se usan tanto para syncs como para
+          el render del mapa cuando elijas Google Maps. Podés generarlas en
+          <a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>.</p>
+
+        <label>
+          Google Maps <strong>browser key</strong> (Maps JavaScript API)
+          <input id="google-browser-key" type="text" placeholder="AIza...">
+          <small>Usada en el cliente para mostrar tiles de Google Maps. Restringila por HTTP referrer.</small>
+        </label>
+
+        <label>
+          Google <strong>server key</strong> (Places API)
+          <input id="google-server-key" type="text" placeholder="AIza...">
+          <small>Usada por el backend para sincronizar lugares. Restringila por IP del servidor.</small>
+        </label>
+
+        <label>
+          Motor de mapa por defecto
+          <select id="default-map-engine">
+            <option value="osm">OpenStreetMap</option>
+            <option value="carto-light">Carto Claro</option>
+            <option value="carto-dark">Carto Oscuro</option>
+            <option value="esri-sat">Esri Satélite</option>
+            <option value="opentopo">OpenTopoMap</option>
+            <option value="google">Google Maps</option>
+          </select>
+        </label>
+
+        <label>
+          Título del sitio
+          <input id="site-title" type="text" placeholder="canchasMapper">
+        </label>
+
+        <button id="save-settings" class="btn-primary">Guardar</button>
+        <span id="save-status" class="status"></span>
+      </section>
+
+      <section class="card">
+        <h2>Fuentes de datos</h2>
+        <p class="hint">
+          OSM (Overpass) es gratis y no requiere key. Google Places requiere el server key
+          configurado arriba. Los syncs corren en background; el avance se muestra debajo.
+        </p>
+        <div class="sync-grid">
+          <div>
+            <h3>OpenStreetMap</h3>
+            <p>Cubre AMBA completo. Tarda 1-3 minutos.</p>
+            <button id="sync-osm" class="btn-primary">Sincronizar OSM</button>
+          </div>
+          <div>
+            <h3>Google Places</h3>
+            <p>Más fotos y datos, pero gasta cuota. Tarda varios minutos.</p>
+            <button id="sync-google" class="btn-primary">Sincronizar Google</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Estado</h2>
+        <div id="stats-box">cargando…</div>
+        <h3>Últimas sincronizaciones</h3>
+        <table id="sync-table">
+          <thead><tr><th>id</th><th>fuente</th><th>inicio</th><th>fin</th><th>status</th><th>+nuevas</th><th>actualizadas</th><th>error</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <button id="refresh-stats" class="btn-secondary">Refrescar</button>
+      </section>
+
+      <section class="card">
+        <h2>Cambiar contraseña</h2>
+        <input id="new-password" type="password" placeholder="Nueva contraseña (mínimo 6)">
+        <button id="change-password" class="btn-primary">Cambiar</button>
+        <span id="password-status" class="status"></span>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>

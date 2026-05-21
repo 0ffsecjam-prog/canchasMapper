@@ -172,6 +172,16 @@
     $('#save-settings').addEventListener('click', saveSettings);
     $('#sync-osm').addEventListener('click', () => syncSource('osm'));
     $('#sync-google').addEventListener('click', () => syncSource('google'));
+    $('#sync-zones').addEventListener('click', () => syncSource('zones'));
+    $('#reassign-zones').addEventListener('click', async () => {
+      try {
+        const r = await fetchJson('/api/admin/reassign-zones', { method: 'POST' });
+        toast(`Reasignadas ${r.assigned}/${r.facilities} facilities a ${r.zones} zonas`, 'success');
+        loadStats();
+      } catch (err) {
+        toast('Error: ' + err.message, 'error');
+      }
+    });
     $('#refresh-stats').addEventListener('click', loadStats);
     $('#change-password').addEventListener('click', changePassword);
   }

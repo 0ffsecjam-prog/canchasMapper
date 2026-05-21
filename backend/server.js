@@ -1,10 +1,12 @@
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
-const { db, getStats, upsertFacility, logSyncStart, logSyncEnd } = require('./db');
+const { db, getStats, upsertFacility, logSyncStart, logSyncEnd, reassignAllZones } = require('./db');
 const facilitiesRouter = require('./routes/facilities');
 const adminRouter = require('./routes/admin');
+const zonesRouter = require('./routes/zones');
 const osm = require('./sources/osm');
+const zonesSource = require('./sources/zones');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const app = express();
@@ -19,6 +21,7 @@ app.use(session({
 }));
 
 app.use('/api', facilitiesRouter);
+app.use('/api/zones', zonesRouter);
 app.use('/api/admin', adminRouter);
 
 app.get('/api/health', (req, res) => {
@@ -35,11 +38,27 @@ app.use(express.static(PUBLIC_DIR));
 app.get('/admin', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
-// Background bootstrap: si la DB está vacía, hacer un sync OSM inicial.
+// Background bootstrap: si la DB está vacía, hacer un sync OSM inicial + zonas.
 async function bootstrap() {
+  const totalZones = db.prepare('SELECT COUNT(*) AS c FROM zones').get().c;
+  if (totalZones === 0) {
+    console.log('[bootstrap] Sin zonas: sincronizando límites administrativos de AMBA...');
+    const syncId = logSyncStart('zones');
+    try {
+      const r = await zonesSource.syncZones(db);
+      logSyncEnd(syncId, 'ok', r.processed, 0, null);
+      console.log(`[bootstrap] ${r.processed} zonas sincronizadas`);
+    } catch (err) {
+      logSyncEnd(syncId, 'error', 0, 0, err.message);
+      console.error('[bootstrap] sync zonas falló:', err.message);
+    }
+  } else {
+    console.log(`[bootstrap] ${totalZones} zonas ya cargadas`);
+  }
+
   const total = db.prepare('SELECT COUNT(*) AS c FROM facilities').get().c;
   if (total > 0) {
-    console.log(`[bootstrap] ${total} canchas ya cargadas, omitiendo sync inicial`);
+    console.log(`[bootstrap] ${total} canchas ya cargadas, omitiendo sync OSM inicial`);
     return;
   }
   console.log('[bootstrap] DB vacía, lanzando sync OSM inicial de AMBA en segundo plano...');
@@ -54,6 +73,9 @@ async function bootstrap() {
     const r = await osm.syncAMBA(countingUpsert);
     logSyncEnd(syncId, 'ok', added, updated, null);
     console.log(`[bootstrap] sync OSM completado: ${added} agregadas, ${updated} actualizadas, ${r.processed} procesadas`);
+    // Después del sync, asignamos zonas
+    const r2 = reassignAllZones();
+    console.log(`[bootstrap] zonas asignadas: ${r2.assigned}/${r2.facilities}`);
   } catch (err) {
     logSyncEnd(syncId, 'error', added, updated, err.message);
     console.error('[bootstrap] sync OSM falló:', err.message);

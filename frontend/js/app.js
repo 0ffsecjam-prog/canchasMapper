@@ -53,7 +53,9 @@
     skate: 'Skate', patinaje_hielo: 'Patinaje sobre hielo', patinaje: 'Patinaje',
     tiro: 'Tiro', tiro_con_arco: 'Tiro con arco', artes_marciales: 'Artes marciales',
     boxeo: 'Boxeo', lucha: 'Lucha', fitness: 'Fitness/Gym', gimnasia: 'Gimnasia',
-    yoga: 'Yoga', escalada: 'Escalada', bowling: 'Bowling', bochas: 'Bochas',
+    yoga: 'Yoga', pilates: 'Pilates', zumba: 'Zumba', crossfit: 'CrossFit',
+    spinning: 'Spinning', aerobica: 'Aeróbica', baile: 'Baile/Danza', ballet: 'Ballet',
+    escalada: 'Escalada', bowling: 'Bowling', bochas: 'Bochas',
     pool: 'Pool/Billar', ping_pong: 'Ping Pong', ajedrez: 'Ajedrez',
     baseball: 'Béisbol', softball: 'Softbol', cricket: 'Cricket',
     equitacion: 'Equitación', turf: 'Turf', automovilismo: 'Automovilismo',
@@ -91,13 +93,19 @@
     map: null,
     cluster: null,
     tileLayer: null,
+    boundaryLayer: null,
+    boundaryGeoJSON: null,
     facilities: [],
+    zones: [],
+    zonesById: new Map(),
     filters: {
       types: new Set(),
       sizes: new Set(),
       sports: new Set(),
+      zones: new Set(),
       q: ''
     },
+    activeZoneTab: 'all',
     settings: {},
     debounceTimer: null
   };
@@ -171,10 +179,12 @@
       chip.querySelector('input').addEventListener('change', e => {
         if (e.target.checked) state.filters.sports.add(sport);
         else state.filters.sports.delete(sport);
+        updateSportsCountBadge();
         applyFilters();
       });
       container.appendChild(chip);
     }
+    updateSportsCountBadge();
   }
 
   function applyFilters() {
@@ -206,8 +216,9 @@
     if (state.filters.types.size) params.set('types', Array.from(state.filters.types).join(','));
     if (state.filters.sizes.size) params.set('sizes', Array.from(state.filters.sizes).join(','));
     if (state.filters.sports.size) params.set('sports', Array.from(state.filters.sports).join(','));
+    if (state.filters.zones.size) params.set('zones', Array.from(state.filters.zones).join(','));
     if (state.filters.q) params.set('q', state.filters.q);
-    params.set('limit', '3000');
+    params.set('limit', '5000');
 
     try {
       const r = await fetch('/api/facilities?' + params.toString());
@@ -217,6 +228,113 @@
       $('#count-badge').textContent = `${data.count.toLocaleString('es-AR')} resultados`;
     } catch (err) {
       toast('Error cargando canchas: ' + err.message, 'error');
+    }
+  }
+
+  async function loadZones() {
+    try {
+      const r = await fetch('/api/zones');
+      const data = await r.json();
+      state.zones = data.zones || [];
+      state.zonesById = new Map(state.zones.map(z => [z.id, z]));
+      renderZoneChips();
+    } catch (err) {
+      console.warn('No pude cargar zonas:', err);
+    }
+  }
+
+  function renderZoneChips() {
+    const container = $('#filter-zones');
+    container.innerHTML = '';
+    if (!state.zones.length) {
+      container.innerHTML = '<div class="muted">No hay zonas cargadas todavía. Sincronizalas desde /admin.</div>';
+      return;
+    }
+    const q = ($('#zone-search').value || '').trim().toLowerCase();
+    const tab = state.activeZoneTab;
+    const filtered = state.zones.filter(z => {
+      if (tab !== 'all' && z.kind !== tab) return false;
+      if (q && !z.name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    if (!filtered.length) {
+      container.innerHTML = '<div class="muted">Sin coincidencias.</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const z of filtered) {
+      const chip = document.createElement('label');
+      chip.className = 'chip has-count';
+      chip.title = `${z.kind || ''} · ${z.facility_count} lugares`;
+      const checked = state.filters.zones.has(z.id) ? 'checked' : '';
+      chip.innerHTML = `<input type="checkbox" value="${z.id}" ${checked}>
+        <span>${escapeHtml(z.name)}</span>
+        <span class="chip-count">${z.facility_count}</span>`;
+      chip.querySelector('input').addEventListener('change', e => {
+        const id = parseInt(e.target.value, 10);
+        if (e.target.checked) state.filters.zones.add(id);
+        else state.filters.zones.delete(id);
+        updateZoneCountBadge();
+        applyFilters();
+      });
+      frag.appendChild(chip);
+    }
+    container.appendChild(frag);
+  }
+
+  function updateZoneCountBadge() {
+    const n = state.filters.zones.size;
+    $('#zones-selected-count').textContent = n ? `(${n} seleccionada${n === 1 ? '' : 's'})` : '';
+  }
+  function updateSportsCountBadge() {
+    const n = state.filters.sports.size;
+    $('#sports-selected-count').textContent = n ? `(${n})` : '';
+  }
+
+  async function loadBoundaries() {
+    if (state.boundaryGeoJSON) return state.boundaryGeoJSON;
+    try {
+      const r = await fetch('/api/zones/geometry');
+      const data = await r.json();
+      state.boundaryGeoJSON = data;
+      return data;
+    } catch (err) {
+      toast('Error cargando límites: ' + err.message, 'error');
+      return null;
+    }
+  }
+
+  async function toggleBoundaries(show) {
+    if (show) {
+      const geo = await loadBoundaries();
+      if (!geo) return;
+      if (state.boundaryLayer) state.map.removeLayer(state.boundaryLayer);
+      state.boundaryLayer = L.geoJSON(geo, {
+        style: f => ({
+          className: `zone-boundary kind-${f.properties.kind || 'otro'}`,
+          fill: true,
+          weight: f.properties.kind === 'partido' ? 1.6 : 1.0,
+          color: f.properties.kind === 'partido' ? '#f59e0b' :
+                 f.properties.kind === 'barrio' ? '#4ade80' :
+                 f.properties.kind === 'comuna' ? '#a855f7' : '#22d3ee',
+          fillOpacity: 0.02,
+          opacity: 0.7,
+          dashArray: f.properties.kind === 'comuna' ? '4 4' : null
+        }),
+        onEachFeature: (feature, layer) => {
+          layer.bindTooltip(feature.properties.name, { sticky: true, className: 'zone-label' });
+          layer.on('click', () => {
+            const id = feature.properties.id;
+            if (state.filters.zones.has(id)) state.filters.zones.delete(id);
+            else state.filters.zones.add(id);
+            updateZoneCountBadge();
+            renderZoneChips();
+            applyFilters();
+          });
+        }
+      }).addTo(state.map);
+    } else {
+      if (state.boundaryLayer) { state.map.removeLayer(state.boundaryLayer); state.boundaryLayer = null; }
     }
   }
 
@@ -263,6 +381,10 @@
     if (f.type) tags.push(`<span class="tag type">${TYPE_LABELS[f.type] || f.type}</span>`);
     if (f.size) tags.push(`<span class="tag size">tamaño: ${f.size}</span>`);
     for (const s of (f.sports || [])) tags.push(`<span class="tag sport">${SPORT_LABELS[s] || s}</span>`);
+    for (const z of (f.zones || [])) {
+      const name = typeof z === 'string' ? z : z.name;
+      tags.push(`<span class="tag" style="color:#a78bfa;border-color:#a78bfa">${escapeHtml(name)}</span>`);
+    }
 
     const photos = (f.photos || []).map(p =>
       `<img src="${escapeAttr(p.url)}" alt="foto" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${escapeAttr(p.url)}','_blank')">`
@@ -322,6 +444,8 @@
   function bindEvents() {
     $('#map-engine').addEventListener('change', e => setTile(e.target.value));
 
+    $('#show-boundaries').addEventListener('change', e => toggleBoundaries(e.target.checked));
+
     $('#search').addEventListener('input', e => {
       state.filters.q = e.target.value.trim();
       applyFilters();
@@ -343,15 +467,36 @@
       });
     });
 
+    $('#zone-search').addEventListener('input', renderZoneChips);
+    $$('.zone-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $$('.zone-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.activeZoneTab = btn.dataset.kind;
+        renderZoneChips();
+      });
+    });
+    $('#clear-zones').addEventListener('click', () => {
+      state.filters.zones.clear();
+      updateZoneCountBadge();
+      renderZoneChips();
+      applyFilters();
+    });
+
     $('#reset-filters').addEventListener('click', () => {
       state.filters.types.clear();
       state.filters.sizes.clear();
       state.filters.sports.clear();
+      state.filters.zones.clear();
       state.filters.q = '';
       $('#search').value = '';
       $('#sport-search').value = '';
+      $('#zone-search').value = '';
       $$('.chip input[type=checkbox]').forEach(i => i.checked = false);
       $$('#filter-sports .chip').forEach(c => c.style.display = '');
+      updateZoneCountBadge();
+      updateSportsCountBadge();
+      renderZoneChips();
       loadFacilities();
     });
 
@@ -382,10 +527,11 @@
       setTile(engine);
     });
     loadStats();
+    loadZones();
     loadFacilities();
 
-    // Refrescar stats cada 30s por si hay sync en progreso
-    setInterval(() => { loadStats(); }, 30000);
+    // Refrescar stats y zonas cada 30s por si hay sync en progreso
+    setInterval(() => { loadStats(); loadZones(); }, 30000);
   }
 
   document.addEventListener('DOMContentLoaded', init);

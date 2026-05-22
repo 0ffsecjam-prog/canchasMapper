@@ -8,12 +8,26 @@ const PLACE_TYPES = [
 ];
 
 const TEXT_QUERIES = [
-  'cancha de futbol', 'futbol 5', 'cancha de padel', 'club de tenis',
-  'club deportivo', 'natatorio', 'pileta', 'gimnasio',
-  'polideportivo', 'cancha de basquet', 'club de rugby', 'club de hockey',
-  'bowling', 'salón de pool', 'pool y billar', 'salón de ping pong',
+  // Canchas comunes
+  'cancha de futbol', 'futbol 5', 'futbol 7', 'futbol 11',
+  'cancha de padel', 'club de tenis', 'cancha de tenis',
+  'club deportivo', 'club de campo', 'polideportivo',
+  'cancha de basquet', 'club de rugby', 'club de hockey',
+  'cancha de voley', 'cancha de handball', 'cancha de squash',
+  // Agua
+  'natatorio', 'pileta', 'piscina', 'club nautico',
+  // Gimnasio / fitness / dance
+  'gimnasio', 'gym', 'fitness center', 'crossfit', 'box crossfit',
+  'zumba', 'clases de zumba', 'pilates', 'yoga', 'estudio de yoga',
+  'spinning', 'estudio de baile', 'salsa', 'bachata', 'tango', 'ballet',
+  'academia de baile', 'centro de pilates',
+  // Otros
+  'bowling', 'salón de pool', 'pool y billar', 'pool', 'billar', 'salón de ping pong',
   'tiro federal', 'club de tiro', 'club de golf', 'cancha de golf',
-  'skate park', 'paintball', 'karting'
+  'skate park', 'paintball', 'karting', 'pista de patinaje',
+  'escalada', 'rocódromo', 'boulder',
+  'artes marciales', 'karate', 'judo', 'taekwondo', 'boxeo', 'jiu jitsu',
+  'tiro con arco', 'esgrima', 'minigolf'
 ];
 
 // Centros para escanear AMBA: CABA + grandes núcleos GBA
@@ -48,14 +62,16 @@ function inferTypeFromGoogle(place) {
   const name = (place.name || '').toLowerCase();
   if (types.includes('stadium')) return 'estadio';
   if (types.includes('bowling_alley')) return 'cancha_techada';
+  if (/zumba|pilates|yoga|crossfit|spinning|baile|danza|aer[oó]bic/.test(name)) return 'gimnasio';
   if (types.includes('gym')) return 'gimnasio';
   if (/complejo|polideportivo/.test(name)) return 'complejo_deportivo';
   if (/club/.test(name)) return 'club';
+  if (/natatorio/.test(name) && /cubiert|techad|indoor/.test(name)) return 'natatorio_techado';
   if (/natatorio|pileta|piscina/.test(name)) return 'natatorio';
-  if (/cancha/.test(name) && /techada|cubierta|indoor/.test(name)) return 'cancha_techada';
+  if (/cancha/.test(name) && /techad|cubiert|indoor/.test(name)) return 'cancha_techada';
   if (/cancha/.test(name) && /semi/.test(name)) return 'cancha_semi_techada';
-  if (/cancha|futbol 5|futbol5/.test(name)) return 'cancha_libre';
-  if (/padel|pádel|tenis|squash|ping ?pong|pool|billar|bowling/.test(name)) return 'cancha_techada';
+  if (/cancha|futbol ?5|futbol ?7/.test(name)) return 'cancha_libre';
+  if (/padel|pádel|squash|ping ?pong|pool|billar|bowling/.test(name)) return 'cancha_techada';
   return 'otro';
 }
 
@@ -63,27 +79,47 @@ function inferSportsFromGoogle(place) {
   const name = (place.name || '').toLowerCase();
   const sports = new Set();
   const checks = [
-    ['futbol|fútbol|futbol 5|futbol5|soccer', 'futbol'],
+    ['futbol|fútbol|futbol ?5|futbol ?7|futbol ?11|soccer', 'futbol'],
     ['padel|pádel|paddle', 'padel'],
-    ['tenis', 'tenis'],
+    ['\\btenis\\b', 'tenis'],
     ['hockey', 'hockey'],
     ['rugby', 'rugby'],
-    ['basquet|básquet|basketball', 'basquet'],
-    ['voley|volley', 'voley'],
+    ['basquet|básquet|basketball|básket', 'basquet'],
+    ['voley|volley|vóley', 'voley'],
     ['natación|natacion|pileta|piscina|natatorio', 'natacion'],
-    ['golf', 'golf'],
+    ['\\bgolf\\b', 'golf'],
+    ['mini ?golf', 'minigolf'],
     ['ping ?pong|tenis de mesa', 'ping_pong'],
     ['pool|billar|snooker', 'pool'],
     ['bowling|bolos', 'bowling'],
     ['tiro federal|polígono|poligono de tiro|tiro deportivo', 'tiro'],
+    ['tiro con arco|arquer[ií]a', 'tiro_con_arco'],
     ['skate', 'skate'],
     ['karting', 'karting'],
     ['paintball', 'paintball'],
-    ['box|boxeo', 'boxeo'],
-    ['judo|karate|taekwondo|mma|jiu jitsu|jiu-jitsu', 'artes_marciales'],
-    ['cross ?fit|gimnasio|gym|fitness', 'fitness'],
-    ['escalada|climbing|boulder', 'escalada'],
-    ['handball', 'handball']
+    ['airsoft', 'airsoft'],
+    ['box(?:eo)?\\b', 'boxeo'],
+    ['judo|karate|taekwondo|mma|jiu ?jitsu|kung ?fu|aikido', 'artes_marciales'],
+    ['esgrima|fencing', 'esgrima'],
+    ['cross ?fit', 'crossfit'],
+    ['zumba', 'zumba'],
+    ['pilates', 'pilates'],
+    ['yoga', 'yoga'],
+    ['spinning', 'spinning'],
+    ['ballet', 'ballet'],
+    ['baile|danza|salsa|bachata|tango|reggaeton|hip ?hop', 'baile'],
+    ['aer[oó]bic', 'aerobica'],
+    ['gimnasio|gym|fitness', 'fitness'],
+    ['escalada|climbing|boulder|rocód?romo', 'escalada'],
+    ['handball', 'handball'],
+    ['squash', 'squash'],
+    ['badminton|bádminton', 'badminton'],
+    ['futsal', 'futsal'],
+    ['hipic[oa]|equitación|equitacion|equestre', 'equitacion'],
+    ['remo|kayak|canoa|canotaje', 'remo'],
+    ['vela|náutico|nautico', 'vela'],
+    ['atletismo', 'atletismo'],
+    ['ciclismo|velódromo|velodromo', 'ciclismo']
   ];
   for (const [pattern, sport] of checks) {
     if (new RegExp(pattern).test(name)) sports.add(sport);

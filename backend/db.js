@@ -10,6 +10,10 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+// User-defined function: normaliza texto (saca acentos, lowercase) para búsqueda
+const stripAccents = (s) => s ? String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() : '';
+db.function('strip_accents', { deterministic: true }, stripAccents);
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS facilities (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,10 +66,32 @@ CREATE TABLE IF NOT EXISTS sync_log (
   error TEXT
 );
 
+CREATE TABLE IF NOT EXISTS zones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  osm_id TEXT UNIQUE,
+  name TEXT NOT NULL,
+  kind TEXT,
+  admin_level INTEGER,
+  parent TEXT,
+  bbox_s REAL, bbox_w REAL, bbox_n REAL, bbox_e REAL,
+  geojson TEXT
+);
+
+CREATE TABLE IF NOT EXISTS facility_zones (
+  facility_id INTEGER NOT NULL,
+  zone_id INTEGER NOT NULL,
+  PRIMARY KEY (facility_id, zone_id),
+  FOREIGN KEY (facility_id) REFERENCES facilities(id) ON DELETE CASCADE,
+  FOREIGN KEY (zone_id) REFERENCES zones(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_facilities_latlng ON facilities(lat, lng);
 CREATE INDEX IF NOT EXISTS idx_facility_sports_sport ON facility_sports(sport);
 CREATE INDEX IF NOT EXISTS idx_facilities_type ON facilities(type);
 CREATE INDEX IF NOT EXISTS idx_facilities_size ON facilities(size);
+CREATE INDEX IF NOT EXISTS idx_zones_kind ON zones(kind);
+CREATE INDEX IF NOT EXISTS idx_zones_bbox ON zones(bbox_s, bbox_n, bbox_w, bbox_e);
+CREATE INDEX IF NOT EXISTS idx_fzones_zone ON facility_zones(zone_id);
 `);
 
 function getSetting(key) {
@@ -174,9 +200,21 @@ function listFacilities(filters = {}) {
     filters.sports.forEach((s, i) => params[`sport${i}`] = s);
   }
 
+  if (filters.zones && filters.zones.length) {
+    const placeholders = filters.zones.map((_, i) => `@zone${i}`).join(',');
+    where.push(`f.id IN (SELECT facility_id FROM facility_zones WHERE zone_id IN (${placeholders}))`);
+    filters.zones.forEach((z, i) => params[`zone${i}`] = z);
+  }
+
   if (filters.q) {
-    where.push(`(f.name LIKE @q OR f.address LIKE @q)`);
-    params.q = `%${filters.q}%`;
+    // Búsqueda permisiva, insensible a mayúsculas y acentos.
+    where.push(`(
+      strip_accents(f.name) LIKE @q
+      OR strip_accents(f.address) LIKE @q
+      OR strip_accents(f.raw_tags) LIKE @q
+      OR f.id IN (SELECT facility_id FROM facility_sports WHERE strip_accents(sport) LIKE @q)
+    )`);
+    params.q = `%${stripAccents(filters.q)}%`;
   }
 
   const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
@@ -185,7 +223,8 @@ function listFacilities(filters = {}) {
   const sql = `
     SELECT f.*,
       (SELECT GROUP_CONCAT(sport) FROM facility_sports WHERE facility_id = f.id) AS sports_csv,
-      (SELECT COUNT(*) FROM facility_photos WHERE facility_id = f.id) AS photo_count
+      (SELECT COUNT(*) FROM facility_photos WHERE facility_id = f.id) AS photo_count,
+      (SELECT GROUP_CONCAT(z.name, '||') FROM facility_zones fz JOIN zones z ON z.id = fz.zone_id WHERE fz.facility_id = f.id) AS zones_csv
     FROM facilities f
     ${whereClause}
     ORDER BY f.id
@@ -207,7 +246,8 @@ function listFacilities(filters = {}) {
     website: r.website,
     opening_hours: r.opening_hours,
     sports: r.sports_csv ? r.sports_csv.split(',') : [],
-    photo_count: r.photo_count
+    photo_count: r.photo_count,
+    zones: r.zones_csv ? r.zones_csv.split('||') : []
   }));
 }
 
@@ -216,7 +256,75 @@ function getFacility(id) {
   if (!f) return null;
   const sports = db.prepare('SELECT sport FROM facility_sports WHERE facility_id = ?').all(id).map(r => r.sport);
   const photos = db.prepare('SELECT url, attribution, source FROM facility_photos WHERE facility_id = ?').all(id);
-  return { ...f, raw_tags: f.raw_tags ? JSON.parse(f.raw_tags) : null, sports, photos };
+  const zones = db.prepare(`
+    SELECT z.id, z.name, z.kind, z.admin_level
+    FROM facility_zones fz JOIN zones z ON z.id = fz.zone_id
+    WHERE fz.facility_id = ?
+    ORDER BY z.admin_level DESC
+  `).all(id);
+  return { ...f, raw_tags: f.raw_tags ? JSON.parse(f.raw_tags) : null, sports, photos, zones };
+}
+
+function listZones() {
+  return db.prepare(`
+    SELECT id, name, kind, admin_level, parent, bbox_s, bbox_w, bbox_n, bbox_e,
+      (SELECT COUNT(*) FROM facility_zones WHERE zone_id = zones.id) AS facility_count
+    FROM zones
+    ORDER BY kind, name
+  `).all();
+}
+
+function getZoneGeometry(id) {
+  const row = db.prepare('SELECT id, name, kind, admin_level, geojson FROM zones WHERE id = ?').get(id);
+  if (!row) return null;
+  return { id: row.id, name: row.name, kind: row.kind, admin_level: row.admin_level, geometry: row.geojson ? JSON.parse(row.geojson) : null };
+}
+
+function getAllZonesWithGeometry() {
+  return db.prepare('SELECT id, name, kind, admin_level, geojson FROM zones').all().map(r => ({
+    id: r.id, name: r.name, kind: r.kind, admin_level: r.admin_level,
+    geometry: r.geojson ? JSON.parse(r.geojson) : null
+  }));
+}
+
+// Asigna zonas a una facility por point-in-polygon (rings outer ignorando holes).
+function assignZonesToFacility(facilityId, lat, lng, polygonsByZone) {
+  const { pointInPolygons, pointInBBox } = require('./utils/geo');
+  const pt = [lng, lat];
+  const matches = [];
+  for (const z of polygonsByZone) {
+    if (!pointInBBox(pt, { s: z.bbox_s, n: z.bbox_n, w: z.bbox_w, e: z.bbox_e })) continue;
+    if (pointInPolygons(pt, z.rings)) matches.push(z.id);
+  }
+  const delStmt = db.prepare('DELETE FROM facility_zones WHERE facility_id = ?');
+  const insStmt = db.prepare('INSERT OR IGNORE INTO facility_zones (facility_id, zone_id) VALUES (?, ?)');
+  const tx = db.transaction(() => {
+    delStmt.run(facilityId);
+    for (const zid of matches) insStmt.run(facilityId, zid);
+  });
+  tx();
+  return matches;
+}
+
+function reassignAllZones() {
+  // Pre-cargar polygonos parseados de todas las zonas
+  const zonesRaw = db.prepare('SELECT id, bbox_s, bbox_n, bbox_w, bbox_e, geojson FROM zones').all();
+  const polygons = zonesRaw.map(z => {
+    let rings = [];
+    try {
+      const g = JSON.parse(z.geojson);
+      if (g && g.type === 'Polygon') rings = g.coordinates;
+      else if (g && g.type === 'MultiPolygon') rings = [].concat(...g.coordinates);
+    } catch {}
+    return { id: z.id, rings, bbox_s: z.bbox_s, bbox_n: z.bbox_n, bbox_w: z.bbox_w, bbox_e: z.bbox_e };
+  });
+  const facs = db.prepare('SELECT id, lat, lng FROM facilities').all();
+  let assigned = 0;
+  for (const f of facs) {
+    const m = assignZonesToFacility(f.id, f.lat, f.lng, polygons);
+    if (m.length) assigned++;
+  }
+  return { facilities: facs.length, assigned, zones: polygons.length };
 }
 
 function getStats() {
@@ -253,5 +361,10 @@ module.exports = {
   getFacility,
   getStats,
   logSyncStart,
-  logSyncEnd
+  logSyncEnd,
+  listZones,
+  getZoneGeometry,
+  getAllZonesWithGeometry,
+  assignZonesToFacility,
+  reassignAllZones
 };

@@ -46,6 +46,14 @@ const SPORT_MAP = {
   fitness: 'fitness',
   gymnastics: 'gimnasia',
   yoga: 'yoga',
+  pilates: 'pilates',
+  zumba: 'zumba',
+  crossfit: 'crossfit',
+  spinning: 'spinning',
+  aerobics: 'aerobica',
+  dance: 'baile',
+  dancing: 'baile',
+  ballet: 'ballet',
   climbing: 'escalada',
   bouldering: 'escalada',
   bowling: 'bowling',
@@ -110,6 +118,18 @@ function parseSports(tags) {
     if (/tiro federal|polígono|poligono de tiro/.test(name)) sports.add('tiro');
     if (/skate/.test(name)) sports.add('skate');
     if (/gim|gym|fitness/.test(name)) sports.add('fitness');
+    if (/zumba/.test(name)) { sports.add('zumba'); sports.add('fitness'); }
+    if (/pilates/.test(name)) { sports.add('pilates'); sports.add('fitness'); }
+    if (/cross\s*fit|crossfit/.test(name)) { sports.add('crossfit'); sports.add('fitness'); }
+    if (/spinning/.test(name)) { sports.add('spinning'); sports.add('fitness'); }
+    if (/yoga/.test(name)) sports.add('yoga');
+    if (/baile|salsa|bachata|tango|reggaeton|hip\s*hop|danza|ballet/.test(name)) sports.add('baile');
+    if (/aer[oó]bic/.test(name)) sports.add('aerobica');
+    if (/escalada|climbing|boulder/.test(name)) sports.add('escalada');
+    if (/box|boxeo/.test(name)) sports.add('boxeo');
+    if (/judo|karate|taekwondo|mma|jiu/.test(name)) sports.add('artes_marciales');
+    if (/handball/.test(name)) sports.add('handball');
+    if (/squash/.test(name)) sports.add('squash');
     if (/club/.test(name) && !sports.size) sports.add('multideporte');
   }
   return Array.from(sports);
@@ -133,7 +153,8 @@ function classifyType(tags) {
   if (leisure === 'sports_centre') return isCovered ? 'complejo_techado' : 'complejo_deportivo';
   if (leisure === 'sports_hall') return 'complejo_techado';
   if (club === 'sport') return 'club';
-  if (leisure === 'fitness_centre') return 'gimnasio';
+  if (leisure === 'fitness_centre' || leisure === 'fitness_station') return 'gimnasio';
+  if (leisure === 'dance' || tags.amenity === 'dance' || tags.amenity === 'yoga') return 'gimnasio';
   if (leisure === 'swimming_pool') return isCovered ? 'natatorio_techado' : 'natatorio';
   if (leisure === 'pitch' || leisure === 'track') {
     if (isCovered) return 'cancha_techada';
@@ -143,6 +164,8 @@ function classifyType(tags) {
   if (leisure === 'golf_course') return 'cancha_golf';
   if (leisure === 'horse_riding') return 'equestre';
   if (leisure === 'bowling_alley') return 'cancha_techada';
+  if (leisure === 'ice_rink') return 'cancha_techada';
+  if (leisure === 'climbing') return 'complejo_techado';
   if (tags.amenity === 'dojo') return 'complejo_techado';
   if (tags.amenity === 'gym') return 'gimnasio';
   if (sport && isCovered) return 'cancha_techada';

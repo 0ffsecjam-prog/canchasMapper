@@ -127,7 +127,107 @@ a:hover { text-decoration: underline; }
   color: var(--accent);
 }
 
-.chips-scroll { max-height: 220px; overflow-y: auto; }
+.chips-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  background: rgba(0,0,0,0.15);
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.check-row input { accent-color: var(--accent); }
+
+.muted {
+  color: var(--text-dim);
+  font-weight: normal;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.btn-link {
+  background: transparent;
+  border: none;
+  color: var(--accent-2);
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 12px;
+  text-decoration: underline;
+  margin-top: 4px;
+}
+.btn-link:hover { color: var(--accent); }
+
+.zone-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.zone-tab {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.zone-tab.active {
+  background: rgba(34,211,238,0.15);
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+}
+
+.chip.has-count .chip-count {
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Overlay de límites */
+.zone-boundary {
+  fill: rgba(34,211,238,0.04);
+  stroke: rgba(34,211,238,0.55);
+  stroke-width: 1.2;
+}
+.zone-boundary.kind-barrio {
+  stroke: rgba(74,222,128,0.55);
+  fill: rgba(74,222,128,0.03);
+}
+.zone-boundary.kind-partido {
+  stroke: rgba(245,158,11,0.6);
+  fill: rgba(245,158,11,0.03);
+  stroke-width: 1.5;
+}
+.zone-boundary.kind-comuna {
+  stroke: rgba(168,85,247,0.5);
+  fill: rgba(168,85,247,0.02);
+  stroke-dasharray: 4 4;
+}
+.zone-label {
+  background: rgba(15,20,25,0.85);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+}
 
 #map {
   grid-area: map;

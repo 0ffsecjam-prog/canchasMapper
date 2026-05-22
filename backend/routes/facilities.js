@@ -10,6 +10,7 @@ router.get('/facilities', (req, res) => {
       types: req.query.types ? String(req.query.types).split(',').filter(Boolean) : null,
       sizes: req.query.sizes ? String(req.query.sizes).split(',').filter(Boolean) : null,
       sports: req.query.sports ? String(req.query.sports).split(',').filter(Boolean) : null,
+      zones: req.query.zones ? String(req.query.zones).split(',').map(Number).filter(n => !isNaN(n)) : null,
       q: req.query.q,
       limit: req.query.limit
     };

@@ -1,9 +1,11 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const fetch = require('node-fetch');
-const { getSetting, setSetting, db, upsertFacility, logSyncStart, logSyncEnd, getStats } = require('../db');
+const { getSetting, setSetting, db, upsertFacility, logSyncStart, logSyncEnd, getStats, reassignAllZones } = require('../db');
 const osm = require('../sources/osm');
 const google = require('../sources/google');
+const zones = require('../sources/zones');
+const zonesRoute = require('./zones');
 
 const router = express.Router();
 
@@ -86,7 +88,7 @@ let syncRunning = {};
 
 router.post('/sync/:source', requireAuth, async (req, res) => {
   const source = req.params.source;
-  if (!['osm', 'google'].includes(source)) {
+  if (!['osm', 'google', 'zones'].includes(source)) {
     return res.status(400).json({ error: 'unknown_source' });
   }
   if (syncRunning[source]) {
@@ -108,10 +110,21 @@ router.post('/sync/:source', requireAuth, async (req, res) => {
   try {
     if (source === 'osm') {
       await osm.syncAMBA(countingUpsert);
+      const r = reassignAllZones();
+      console.log(`[zone-reassign] ${r.assigned}/${r.facilities} facilities asignadas a zonas`);
     } else if (source === 'google') {
       const key = getSetting('google_places_server_key');
       if (!key) throw new Error('Google Places key no configurada');
       await google.syncAMBA(countingUpsert, { apiKey: key });
+      const r = reassignAllZones();
+      console.log(`[zone-reassign] ${r.assigned}/${r.facilities} facilities asignadas a zonas`);
+    } else if (source === 'zones') {
+      const r = await zones.syncZones(db);
+      added = r.processed;
+      const r2 = reassignAllZones();
+      updated = r2.assigned;
+      console.log(`[zones] ${r.processed} zonas, ${r2.assigned}/${r2.facilities} facilities asignadas`);
+      zonesRoute.invalidateCache();
     }
     logSyncEnd(syncId, 'ok', added, updated, null);
   } catch (err) {
@@ -119,6 +132,16 @@ router.post('/sync/:source', requireAuth, async (req, res) => {
     console.error(`[sync ${source}] error:`, err);
   } finally {
     delete syncRunning[source];
+  }
+});
+
+// Reasigna facilities a zonas sin tocar datos
+router.post('/reassign-zones', requireAuth, (req, res) => {
+  try {
+    const r = reassignAllZones();
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -18,7 +18,7 @@
         <span class="subtitle">canchas y lugares para hacer deporte en AMBA</span>
       </div>
       <div class="topbar-actions">
-        <input id="search" type="search" placeholder="Buscar por nombre o dirección…">
+        <input id="search" type="search" placeholder="Buscar: nombre, dirección, deporte (zumba, padel, futbol 5, tiro federal…)">
         <span id="count-badge" class="badge">0 resultados</span>
         <button id="toggle-filters" class="btn-ghost">Filtros</button>
         <a href="/admin" class="btn-ghost">Admin</a>
@@ -27,7 +27,7 @@
 
     <aside id="sidebar" class="sidebar">
       <div class="filter-group">
-        <h3>Motor del mapa</h3>
+        <h3>Mapa</h3>
         <select id="map-engine">
           <option value="osm">OpenStreetMap (default)</option>
           <option value="carto-light">Carto · Claro</option>
@@ -36,6 +36,21 @@
           <option value="opentopo">OpenTopoMap</option>
           <option value="google" disabled>Google Maps (requiere API key)</option>
         </select>
+        <label class="check-row">
+          <input type="checkbox" id="show-boundaries"> Mostrar límites (partidos / barrios)
+        </label>
+      </div>
+
+      <div class="filter-group">
+        <h3>Zona <span id="zones-selected-count" class="muted"></span></h3>
+        <input id="zone-search" type="search" placeholder="Buscar barrio o partido…">
+        <div class="zone-tabs">
+          <button class="zone-tab active" data-kind="all">Todas</button>
+          <button class="zone-tab" data-kind="barrio">Barrios CABA</button>
+          <button class="zone-tab" data-kind="partido">Partidos GBA</button>
+        </div>
+        <div id="filter-zones" class="chip-group chips-scroll">cargando…</div>
+        <button id="clear-zones" class="btn-link">Limpiar zonas</button>
       </div>
 
       <div class="filter-group">
@@ -53,13 +68,13 @@
       </div>
 
       <div class="filter-group">
-        <h3>Deporte</h3>
-        <input id="sport-search" type="search" placeholder="Filtrar deporte…">
+        <h3>Deporte / Actividad <span id="sports-selected-count" class="muted"></span></h3>
+        <input id="sport-search" type="search" placeholder="Filtrar deporte (futbol, zumba, yoga…)">
         <div id="filter-sports" class="chip-group chips-scroll"></div>
       </div>
 
       <div class="filter-group">
-        <button id="reset-filters" class="btn-secondary">Limpiar filtros</button>
+        <button id="reset-filters" class="btn-secondary">Limpiar todos los filtros</button>
       </div>
 
       <div class="filter-group sidebar-stats">

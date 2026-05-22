@@ -11,6 +11,17 @@ const zonesSource = require('./sources/zones');
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const app = express();
 
+// Reset opcional del hash de admin: si RESET_ADMIN_PASSWORD=1, borra el hash
+// guardado en DB para que el login caiga al fallback ADMIN_PASSWORD del env.
+if (process.env.RESET_ADMIN_PASSWORD === '1' || process.env.RESET_ADMIN_PASSWORD === 'true') {
+  try {
+    const r = db.prepare("DELETE FROM settings WHERE key='admin_password_hash'").run();
+    console.log(`[reset] admin_password_hash borrado (${r.changes} fila/s). Login con ADMIN_PASSWORD del env (default admin1234).`);
+  } catch (e) {
+    console.warn('[reset] no pude borrar hash:', e.message);
+  }
+}
+
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
 app.use(session({

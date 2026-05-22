@@ -13,3 +13,6 @@ services:
       - DATA_DIR=/app/data
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin1234}
       - SESSION_SECRET=${SESSION_SECRET:-cambiame-en-produccion}
+      # Si la pusiste en 1, borra el hash guardado en DB en cada arranque
+      # y vuelve al fallback de ADMIN_PASSWORD. Dejala vacía o sacala después.
+      - RESET_ADMIN_PASSWORD=${RESET_ADMIN_PASSWORD:-}

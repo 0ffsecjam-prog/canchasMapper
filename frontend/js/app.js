@@ -126,21 +126,8 @@
     state.tileLayer = L.tileLayer(provider.url, provider.options).addTo(state.map);
   }
 
-  function makeIcon(type) {
-    const color = TYPE_COLORS[type] || '#94a3b8';
-    const html = `<div style="
-      width: 14px; height: 14px;
-      background: ${color};
-      border: 2px solid #0f1419;
-      border-radius: 50%;
-      box-shadow: 0 0 0 1px ${color}55, 0 2px 4px rgba(0,0,0,0.5);
-    "></div>`;
-    return L.divIcon({
-      className: 'cm-marker',
-      html,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7]
-    });
+  function typeColor(type) {
+    return TYPE_COLORS[type] || '#94a3b8';
   }
 
   function renderTypeChips() {
@@ -211,23 +198,37 @@
     }
   }
 
-  async function loadFacilities() {
+  function buildFilterParams(opts = {}) {
     const params = new URLSearchParams();
     if (state.filters.types.size) params.set('types', Array.from(state.filters.types).join(','));
     if (state.filters.sizes.size) params.set('sizes', Array.from(state.filters.sizes).join(','));
     if (state.filters.sports.size) params.set('sports', Array.from(state.filters.sports).join(','));
     if (state.filters.zones.size) params.set('zones', Array.from(state.filters.zones).join(','));
     if (state.filters.q) params.set('q', state.filters.q);
-    params.set('limit', '5000');
+    if (opts.includeZoneNames && state.filters.zones.size) {
+      const names = Array.from(state.filters.zones)
+        .map(id => state.zonesById.get(id))
+        .filter(Boolean)
+        .map(z => z.name);
+      if (names.length) params.set('zoneNames', names.join(', '));
+    }
+    return params;
+  }
 
+  async function loadFacilities() {
+    const params = buildFilterParams();
+    params.set('compact', '1'); // payload liviano, sin tope: trae TODAS
+
+    $('#count-badge').textContent = 'cargando…';
     try {
       const r = await fetch('/api/facilities?' + params.toString());
       const data = await r.json();
       state.facilities = data.facilities || [];
       renderMarkers();
-      $('#count-badge').textContent = `${data.count.toLocaleString('es-AR')} resultados`;
+      $('#count-badge').textContent = `${data.count.toLocaleString('es-AR')} lugares`;
     } catch (err) {
       toast('Error cargando canchas: ' + err.message, 'error');
+      $('#count-badge').textContent = 'error';
     }
   }
 
@@ -343,8 +344,16 @@
     state.cluster.clearLayers();
     const markers = [];
     for (const f of state.facilities) {
-      const m = L.marker([f.lat, f.lng], { icon: makeIcon(f.type) });
-      m.bindTooltip(buildTooltip(f), { direction: 'top', offset: [0, -8] });
+      if (typeof f.lat !== 'number' || typeof f.lng !== 'number') continue;
+      // circleMarker se renderiza en canvas: soporta decenas de miles de puntos.
+      const m = L.circleMarker([f.lat, f.lng], {
+        radius: 6,
+        fillColor: typeColor(f.type),
+        color: '#0f1419',
+        weight: 1.5,
+        fillOpacity: 0.9
+      });
+      m.bindTooltip(buildTooltip(f), { direction: 'top', offset: [0, -6] });
       m.on('click', () => showDetail(f.id));
       markers.push(m);
     }
@@ -441,8 +450,33 @@
     }
   }
 
+  function exportData(format) {
+    const params = buildFilterParams({ includeZoneNames: true });
+    if (format === 'html') {
+      params.set('title', 'canchasMapper · ' + (state.filters.q ? state.filters.q : 'AMBA'));
+    }
+    const url = `/api/export/${format}?${params.toString()}`;
+    // Forzar descarga
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast(`Generando export ${format.toUpperCase()}…`, 'success');
+  }
+
   function bindEvents() {
     $('#map-engine').addEventListener('change', e => setTile(e.target.value));
+
+    $('#export-xlsx').addEventListener('click', () => exportData('xlsx'));
+    $('#export-html').addEventListener('click', () => exportData('html'));
+    $('#export-html-preview').addEventListener('click', () => {
+      const params = buildFilterParams({ includeZoneNames: true });
+      params.set('inline', '1');
+      params.set('title', 'canchasMapper · ' + (state.filters.q ? state.filters.q : 'AMBA'));
+      window.open(`/api/export/html?${params.toString()}`, '_blank');
+    });
 
     $('#show-boundaries').addEventListener('change', e => toggleBoundaries(e.target.checked));
 

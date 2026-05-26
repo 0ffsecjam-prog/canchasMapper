@@ -14,7 +14,8 @@ router.get('/facilities', (req, res) => {
       q: req.query.q,
       limit: req.query.limit
     };
-    const data = listFacilities(filters);
+    const compact = req.query.compact === '1' || req.query.compact === 'true';
+    const data = listFacilities(filters, { compact });
     res.json({ count: data.length, facilities: data });
   } catch (err) {
     res.status(500).json({ error: err.message });

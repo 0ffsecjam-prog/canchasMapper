@@ -31,17 +31,45 @@ const TEXT_QUERIES = [
 ];
 
 // Centros para escanear AMBA: CABA + grandes núcleos GBA
+// Centros para escanear todo el AMBA (CABA + 40 partidos + La Plata).
+// Cada nearbysearch/textsearch trae hasta ~60 resultados, así que conviene
+// muchos centros con radios moderados para no perder densidad.
 const SEARCH_CENTERS = [
-  { name: 'CABA',          lat: -34.6037, lng: -58.3816, radius: 9000 },
-  { name: 'San Isidro',    lat: -34.4720, lng: -58.5070, radius: 8000 },
-  { name: 'Tigre',         lat: -34.4264, lng: -58.5796, radius: 8000 },
-  { name: 'San Martín',    lat: -34.5739, lng: -58.5378, radius: 7000 },
-  { name: 'La Matanza',    lat: -34.7700, lng: -58.6300, radius: 12000 },
-  { name: 'Quilmes',       lat: -34.7220, lng: -58.2540, radius: 8000 },
-  { name: 'Lomas',         lat: -34.7615, lng: -58.4060, radius: 8000 },
-  { name: 'Avellaneda',    lat: -34.6650, lng: -58.3650, radius: 6000 },
-  { name: 'Morón',         lat: -34.6500, lng: -58.6200, radius: 8000 },
-  { name: 'La Plata',      lat: -34.9214, lng: -57.9544, radius: 10000 }
+  { name: 'CABA centro',     lat: -34.6037, lng: -58.3816, radius: 7000 },
+  { name: 'CABA sur',        lat: -34.6500, lng: -58.4200, radius: 6000 },
+  { name: 'CABA norte',      lat: -34.5650, lng: -58.4500, radius: 6000 },
+  { name: 'San Isidro',      lat: -34.4720, lng: -58.5070, radius: 7000 },
+  { name: 'Vicente López',   lat: -34.5260, lng: -58.4790, radius: 6000 },
+  { name: 'Tigre',           lat: -34.4264, lng: -58.5796, radius: 8000 },
+  { name: 'San Fernando',    lat: -34.4410, lng: -58.5560, radius: 6000 },
+  { name: 'San Martín',      lat: -34.5739, lng: -58.5378, radius: 7000 },
+  { name: 'Tres de Febrero', lat: -34.6000, lng: -58.5650, radius: 6000 },
+  { name: 'San Miguel',      lat: -34.5430, lng: -58.7120, radius: 8000 },
+  { name: 'Pilar',           lat: -34.4585, lng: -58.9140, radius: 12000 },
+  { name: 'Escobar',         lat: -34.3490, lng: -58.7960, radius: 10000 },
+  { name: 'Campana/Zárate',  lat: -34.1630, lng: -58.9590, radius: 14000 },
+  { name: 'Luján',           lat: -34.5700, lng: -59.1050, radius: 12000 },
+  { name: 'Gral Rodríguez',  lat: -34.6080, lng: -58.9520, radius: 10000 },
+  { name: 'Moreno',          lat: -34.6510, lng: -58.7900, radius: 9000 },
+  { name: 'Merlo',           lat: -34.6650, lng: -58.7270, radius: 8000 },
+  { name: 'Morón',           lat: -34.6500, lng: -58.6200, radius: 7000 },
+  { name: 'Ituzaingó',       lat: -34.6580, lng: -58.6680, radius: 6000 },
+  { name: 'La Matanza N',    lat: -34.7000, lng: -58.6300, radius: 9000 },
+  { name: 'La Matanza S',    lat: -34.8200, lng: -58.6600, radius: 11000 },
+  { name: 'Marcos Paz',      lat: -34.7800, lng: -58.8380, radius: 10000 },
+  { name: 'Cañuelas',        lat: -35.0530, lng: -58.7610, radius: 13000 },
+  { name: 'Ezeiza',          lat: -34.8530, lng: -58.5230, radius: 9000 },
+  { name: 'Esteban Echeverría', lat: -34.8120, lng: -58.4600, radius: 7000 },
+  { name: 'Lomas',           lat: -34.7615, lng: -58.4060, radius: 7000 },
+  { name: 'Avellaneda',      lat: -34.6650, lng: -58.3650, radius: 6000 },
+  { name: 'Lanús',           lat: -34.7060, lng: -58.3920, radius: 6000 },
+  { name: 'Quilmes',         lat: -34.7220, lng: -58.2540, radius: 8000 },
+  { name: 'Berazategui',     lat: -34.7650, lng: -58.2120, radius: 8000 },
+  { name: 'Florencio Varela',lat: -34.8260, lng: -58.2760, radius: 9000 },
+  { name: 'Almirante Brown', lat: -34.8200, lng: -58.3870, radius: 8000 },
+  { name: 'Pte Perón/SVicente', lat: -35.0100, lng: -58.4200, radius: 12000 },
+  { name: 'La Plata',        lat: -34.9214, lng: -57.9544, radius: 11000 },
+  { name: 'Berisso/Ensenada',lat: -34.8730, lng: -57.8860, radius: 9000 }
 ];
 
 async function googleFetch(url, params, key) {

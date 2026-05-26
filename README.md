@@ -30,6 +30,14 @@ karting, paintball, etc.
 - 🔍 **Búsqueda inteligente** insensible a mayúsculas y acentos
   (`futbol` matchea `Fútbol`), atraviesa nombre + dirección + sport + tags.
 - 📸 **Fotos** desde OSM/Wikimedia Commons (gratis) y Google Places (con key).
+- 🔄 **Remapear todo** con un botón: corre zonas + OSM + Google + reasignación.
+- 📊 **Export a Excel (.xlsx)**: columnas separadas (nombre, tipo, tamaño,
+  deportes, calle, barrio, partido, lat/lng, teléfono, web, horarios, links a
+  Google Maps/OSM), celdas de tipo coloreadas, hoja Resumen con totales.
+  Respeta los filtros activos.
+- 🗺️ **Export a HTML** autocontenido: un `.html` con mapa Leaflet embebido y
+  sólo las canchas que pasan tus filtros, con popups, leyenda y links. Lo
+  abrís en cualquier lado o lo metés en un iframe.
 - 🔒 **Panel admin** en `/admin` para configurar API keys, lanzar syncs
   manuales y monitorear el estado.
 
@@ -86,8 +94,10 @@ SESSION_SECRET=algun-secret-largo-random
 
 ## Endpoints
 
-- `GET  /api/facilities?bbox=&types=&sizes=&sports=&zones=&q=&limit=` —
-  listar canchas. `zones=id1,id2,...` filtra por zona.
+- `GET  /api/facilities?types=&sizes=&sports=&zones=&q=&compact=1` —
+  listar canchas. `zones=id1,id2,...` filtra por zona. `compact=1` devuelve
+  un payload liviano (sólo id/nombre/lat/lng/tipo/tamaño/deportes) **sin tope**,
+  pensado para dibujar todas las canchas en el mapa.
 - `GET  /api/facilities/:id` — detalle, incluye fotos y zonas asignadas.
 - `GET  /api/stats` — totales y top deportes.
 - `GET  /api/zones` — todos los barrios CABA y partidos GBA disponibles.
@@ -99,17 +109,42 @@ SESSION_SECRET=algun-secret-largo-random
 - `GET  /api/admin/settings` — settings privadas (requiere login).
 - `POST /api/admin/settings`.
 - `POST /api/admin/sync/:source` — `osm`, `google` o `zones`.
+- `POST /api/admin/sync-all` — remapeo completo: zonas + OSM + Google + reasignación.
 - `POST /api/admin/reassign-zones` — recalcular qué zona corresponde a cada
   facility por point-in-polygon.
+- `GET  /api/export/xlsx?types=&sizes=&sports=&zones=&q=` — descarga Excel.
+- `GET  /api/export/html?...&inline=1&title=...` — descarga (o previsualiza
+  con `inline=1`) un HTML autocontenido con mapa de los resultados filtrados.
 - `GET  /api/admin/sync/status` — estado actual + estadísticas + últimos
   syncs.
 - `GET  /api/admin/photo?ref=...` — proxy de fotos de Google Places.
 
-## Bounding box AMBA
+## Bounding box AMBA y cobertura completa
 
-Por defecto cubre el rectángulo `S=-34.92, W=-58.75, N=-34.30, E=-58.25`
-(de Tigre/Pilar a La Plata, de Lomas/Ezeiza al Río de la Plata). Para ajustarlo
-editá `AMBA_BBOX` en `backend/sources/osm.js`.
+Por defecto cubre el rectángulo `S=-35.15, W=-59.55, N=-34.10, E=-57.80`, que
+abarca **CABA + los 40 partidos del GBA + La Plata** (de Campana/Zárate y Pilar
+al norte hasta La Plata/Cañuelas al sur, de Luján/Marcos Paz al oeste hasta el
+Río de la Plata). Para ajustarlo editá `AMBA_BBOX` en `backend/sources/osm.js`.
+
+Para traer **absolutamente todas** las canchas sin que Overpass se corte por
+tamaño/timeout, el sync de OSM **trocea el AMBA en una grilla 5×5 (25 tiles)** y
+consulta cada uno por separado, deduplicando. Por eso tarda más (varios
+minutos) pero la cobertura es total. No hay tope de cantidad: el mapa carga
+todas (usa `circleMarker` sobre canvas + clustering, soporta decenas de miles)
+y los exports incluyen todas.
+
+> ¿Ya tenías datos de una versión anterior (que cortaba en 5000 y usaba un bbox
+> más chico)? Andá a `/admin` → **Remapear todo** para re-sincronizar con la
+> cobertura ampliada.
+
+### Para que aparezcan TODAS
+
+OpenStreetMap es muy completo en infraestructura (canchas, clubes, complejos),
+pero muchos comercios chicos (futbol 5, pádel, gimnasios, estudios de zumba,
+salones de pool) sólo están en Google. Para máxima cobertura:
+1. Cargá tu **Google Places server key** en `/admin`.
+2. Tocá **Remapear todo** (corre OSM tileado + Google sobre ~35 centros que
+   cubren todo el AMBA + reasignación de zonas).
 
 ## Categorización: deportes y actividades soportadas
 

@@ -1,9 +1,11 @@
 const fetch = require('node-fetch');
 const { parseSports, classifyType, classifySize, buildAddress } = require('../utils/classifier');
 
-// AMBA bounding box: cubre CABA + GBA (norte/oeste/sur).
+// AMBA bounding box: CABA + los 40 partidos del Gran Buenos Aires + La Plata.
+// Cubre desde Campana/Pilar (norte) hasta La Plata/Brandsen (sur), de
+// Luján/Marcos Paz (oeste) al Río de la Plata (este).
 // south, west, north, east
-const AMBA_BBOX = [-34.92, -58.75, -34.30, -58.25];
+const AMBA_BBOX = [-35.15, -59.55, -34.10, -57.80];
 
 const DEFAULT_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
@@ -84,54 +86,99 @@ async function fetchOverpass(query) {
   throw lastError || new Error('Todos los endpoints de Overpass fallaron');
 }
 
-async function syncAMBA(upsertFn, opts = {}) {
-  const bbox = opts.bbox || AMBA_BBOX;
-  const query = buildQuery(bbox);
-  const data = await fetchOverpass(query);
-  let count = 0;
-  for (const el of (data.elements || [])) {
-    const coords = getCoords(el);
-    if (!coords) continue;
-    const tags = el.tags || {};
-    if (!tags.sport && !tags.leisure && !tags.club && !tags.amenity) continue;
+function processElement(el, upsertFn, seen) {
+  const coords = getCoords(el);
+  if (!coords) return false;
+  const tags = el.tags || {};
+  if (!tags.sport && !tags.leisure && !tags.club && !tags.amenity) return false;
+  const sourceId = `${el.type}/${el.id}`;
+  if (seen && seen.has(sourceId)) return false;
+  if (seen) seen.add(sourceId);
 
-    const sports = parseSports(tags);
-    const type = classifyType(tags);
-    const areaM2 = getAreaM2(el);
-    const size = classifySize(tags, areaM2);
-    const address = buildAddress(tags);
+  const sports = parseSports(tags);
+  const type = classifyType(tags);
+  const areaM2 = getAreaM2(el);
+  const size = classifySize(tags, areaM2);
+  const address = buildAddress(tags);
 
-    // Foto si la entidad la trae (algunos POIs tienen wikimedia_commons o image)
-    const photos = [];
-    if (tags.image) photos.push({ url: tags.image, attribution: 'OSM contributors' });
-    if (tags.wikimedia_commons && /^File:/i.test(tags.wikimedia_commons)) {
-      const fileName = tags.wikimedia_commons.replace(/^File:/i, '').replace(/\s/g, '_');
-      photos.push({
-        url: `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=640`,
-        attribution: 'Wikimedia Commons'
-      });
-    }
-
-    upsertFn({
-      source: 'osm',
-      source_id: `${el.type}/${el.id}`,
-      name: tags.name || tags['name:es'] || null,
-      lat: coords.lat,
-      lng: coords.lng,
-      address,
-      type,
-      size,
-      area_m2: areaM2,
-      phone: tags.phone || tags['contact:phone'] || null,
-      website: tags.website || tags['contact:website'] || null,
-      opening_hours: tags.opening_hours || null,
-      raw_tags: tags,
-      sports,
-      photos
+  const photos = [];
+  if (tags.image) photos.push({ url: tags.image, attribution: 'OSM contributors' });
+  if (tags.wikimedia_commons && /^File:/i.test(tags.wikimedia_commons)) {
+    const fileName = tags.wikimedia_commons.replace(/^File:/i, '').replace(/\s/g, '_');
+    photos.push({
+      url: `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=640`,
+      attribution: 'Wikimedia Commons'
     });
-    count++;
   }
-  return { processed: count, total: (data.elements || []).length };
+
+  upsertFn({
+    source: 'osm',
+    source_id: sourceId,
+    name: tags.name || tags['name:es'] || null,
+    lat: coords.lat,
+    lng: coords.lng,
+    address,
+    type,
+    size,
+    area_m2: areaM2,
+    phone: tags.phone || tags['contact:phone'] || null,
+    website: tags.website || tags['contact:website'] || null,
+    opening_hours: tags.opening_hours || null,
+    raw_tags: tags,
+    sports,
+    photos
+  });
+  return true;
 }
 
-module.exports = { syncAMBA, AMBA_BBOX };
+// Divide un bbox [s,w,n,e] en una grilla rows×cols de subboxes.
+function makeTiles(bbox, rows, cols) {
+  const [s, w, n, e] = bbox;
+  const dLat = (n - s) / rows;
+  const dLng = (e - w) / cols;
+  const tiles = [];
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < cols; j++) {
+      tiles.push([s + i * dLat, w + j * dLng, s + (i + 1) * dLat, w + (j + 1) * dLng]);
+    }
+  }
+  return tiles;
+}
+
+async function syncAMBA(upsertFn, opts = {}) {
+  const bbox = opts.bbox || AMBA_BBOX;
+  // Troceamos en grilla para no exceder límites de Overpass y cubrir todo AMBA.
+  const rows = opts.rows || 5;
+  const cols = opts.cols || 5;
+  const tiles = opts.bbox && opts.noTile ? [bbox] : makeTiles(bbox, rows, cols);
+  const seen = new Set();
+  let processed = 0;
+  let tilesOk = 0;
+  const errors = [];
+
+  for (let t = 0; t < tiles.length; t++) {
+    const query = buildQuery(tiles[t]);
+    try {
+      const data = await fetchOverpass(query);
+      let tileCount = 0;
+      for (const el of (data.elements || [])) {
+        if (processElement(el, upsertFn, seen)) { processed++; tileCount++; }
+      }
+      tilesOk++;
+      if (opts.onProgress) opts.onProgress({ tile: t + 1, total: tiles.length, processed, tileCount });
+      console.log(`[osm] tile ${t + 1}/${tiles.length}: +${tileCount} (total únicos ${processed})`);
+    } catch (err) {
+      errors.push(`tile ${t + 1}: ${err.message}`);
+      console.warn(`[osm] tile ${t + 1}/${tiles.length} falló: ${err.message}`);
+    }
+    // Respiro entre requests para no abusar de Overpass
+    if (t < tiles.length - 1) await new Promise(r => setTimeout(r, 1200));
+  }
+
+  if (tilesOk === 0) {
+    throw new Error('Overpass no respondió en ningún tile: ' + errors.slice(0, 3).join('; '));
+  }
+  return { processed, tiles: tiles.length, tilesOk, errors };
+}
+
+module.exports = { syncAMBA, AMBA_BBOX, makeTiles };

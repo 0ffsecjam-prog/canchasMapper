@@ -5,6 +5,7 @@ const { db, getStats, upsertFacility, logSyncStart, logSyncEnd, reassignAllZones
 const facilitiesRouter = require('./routes/facilities');
 const adminRouter = require('./routes/admin');
 const zonesRouter = require('./routes/zones');
+const exportRouter = require('./routes/export');
 const osm = require('./sources/osm');
 const zonesSource = require('./sources/zones');
 
@@ -33,6 +34,7 @@ app.use(session({
 
 app.use('/api', facilitiesRouter);
 app.use('/api/zones', zonesRouter);
+app.use('/api/export', exportRouter);
 app.use('/api/admin', adminRouter);
 
 app.get('/api/health', (req, res) => {

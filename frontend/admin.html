@@ -76,6 +76,13 @@
           OSM (Overpass) es gratis y no requiere key. Google Places requiere el server key
           configurado arriba. Los syncs corren en background; el avance se muestra debajo.
         </p>
+        <div class="remap-all">
+          <div>
+            <h3>Remapear todo</h3>
+            <p>Corre zonas + OSM + Google (si hay key) + reasignación, en orden, de una sola vez.</p>
+          </div>
+          <button id="sync-all" class="btn-primary btn-big">🔄 Remapear todo</button>
+        </div>
         <div class="sync-grid">
           <div>
             <h3>OpenStreetMap</h3>
@@ -93,6 +100,17 @@
             <button id="sync-zones" class="btn-primary">Sincronizar zonas</button>
             <button id="reassign-zones" class="btn-secondary" style="margin-left:6px">Reasignar facilities a zonas</button>
           </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Exportar todo</h2>
+        <p class="hint">Descarga el dataset completo (sin filtros). Para exportar con filtros
+          específicos usá los botones del mapa en la home.</p>
+        <div class="export-buttons-row">
+          <a class="btn-export" href="/api/export/xlsx" download>📊 Excel completo (.xlsx)</a>
+          <a class="btn-export" href="/api/export/html" download>🗺️ HTML con mapa</a>
+          <a class="btn-export" href="/api/export/html?inline=1" target="_blank">👁️ Previsualizar HTML</a>
         </div>
       </section>
 

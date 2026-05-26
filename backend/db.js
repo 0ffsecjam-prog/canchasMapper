@@ -172,7 +172,7 @@ function upsertFacility(facility) {
   return tx(facility);
 }
 
-function listFacilities(filters = {}) {
+function buildFacilityWhere(filters = {}) {
   const where = [];
   const params = {};
 
@@ -218,7 +218,34 @@ function listFacilities(filters = {}) {
   }
 
   const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
-  const limit = Math.min(parseInt(filters.limit, 10) || 2000, 5000);
+  return { whereClause, params };
+}
+
+function listFacilities(filters = {}, opts = {}) {
+  const { whereClause, params } = buildFacilityWhere(filters);
+  // Sin tope artificial: por defecto trae todo. Cap alto sólo por seguridad.
+  const limit = Math.min(parseInt(filters.limit, 10) || 1000000, 1000000);
+
+  if (opts.compact) {
+    // Payload liviano para el mapa: sin zonas ni photo_count (subqueries caras).
+    const sql = `
+      SELECT f.id, f.name, f.lat, f.lng, f.type, f.size,
+        (SELECT GROUP_CONCAT(sport) FROM facility_sports WHERE facility_id = f.id) AS sports_csv
+      FROM facilities f
+      ${whereClause}
+      ORDER BY f.id
+      LIMIT ${limit}
+    `;
+    return db.prepare(sql).all(params).map(r => ({
+      id: r.id,
+      name: r.name,
+      lat: r.lat,
+      lng: r.lng,
+      type: r.type,
+      size: r.size,
+      sports: r.sports_csv ? r.sports_csv.split(',') : []
+    }));
+  }
 
   const sql = `
     SELECT f.*,
@@ -249,6 +276,50 @@ function listFacilities(filters = {}) {
     photo_count: r.photo_count,
     zones: r.zones_csv ? r.zones_csv.split('||') : []
   }));
+}
+
+// Para export: incluye zonas separadas por tipo + 1ra foto.
+function listFacilitiesForExport(filters = {}) {
+  const { whereClause, params } = buildFacilityWhere(filters);
+  const limit = Math.min(parseInt(filters.limit, 10) || 1000000, 1000000);
+  const sql = `
+    SELECT f.*,
+      (SELECT GROUP_CONCAT(sport) FROM facility_sports WHERE facility_id = f.id) AS sports_csv,
+      (SELECT GROUP_CONCAT(z.name || '~' || COALESCE(z.kind,''), '||') FROM facility_zones fz JOIN zones z ON z.id = fz.zone_id WHERE fz.facility_id = f.id) AS zones_csv,
+      (SELECT url FROM facility_photos WHERE facility_id = f.id LIMIT 1) AS photo_url
+    FROM facilities f
+    ${whereClause}
+    ORDER BY f.name
+    LIMIT ${limit}
+  `;
+  const rows = db.prepare(sql).all(params);
+  return rows.map(r => {
+    const zoneObjs = (r.zones_csv ? r.zones_csv.split('||') : []).map(z => {
+      const [name, kind] = z.split('~');
+      return { name, kind };
+    });
+    const barrios = zoneObjs.filter(z => z.kind === 'barrio' || z.kind === 'comuna').map(z => z.name);
+    const partidos = zoneObjs.filter(z => z.kind === 'partido').map(z => z.name);
+    return {
+      id: r.id,
+      source: r.source,
+      name: r.name,
+      lat: r.lat,
+      lng: r.lng,
+      address: r.address,
+      type: r.type,
+      size: r.size,
+      area_m2: r.area_m2,
+      phone: r.phone,
+      website: r.website,
+      opening_hours: r.opening_hours,
+      sports: r.sports_csv ? r.sports_csv.split(',') : [],
+      barrios,
+      partidos,
+      zones: zoneObjs.map(z => z.name),
+      photo_url: r.photo_url || null
+    };
+  });
 }
 
 function getFacility(id) {
@@ -358,6 +429,7 @@ module.exports = {
   setSetting,
   upsertFacility,
   listFacilities,
+  listFacilitiesForExport,
   getFacility,
   getStats,
   logSyncStart,

@@ -30,6 +30,14 @@ karting, paintball, etc.
 - 🔍 **Búsqueda inteligente** insensible a mayúsculas y acentos
   (`futbol` matchea `Fútbol`), atraviesa nombre + dirección + sport + tags.
 - 📸 **Fotos** desde OSM/Wikimedia Commons (gratis) y Google Places (con key).
+- 🔄 **Remapear todo** con un botón: corre zonas + OSM + Google + reasignación.
+- 📊 **Export a Excel (.xlsx)**: columnas separadas (nombre, tipo, tamaño,
+  deportes, calle, barrio, partido, lat/lng, teléfono, web, horarios, links a
+  Google Maps/OSM), celdas de tipo coloreadas, hoja Resumen con totales.
+  Respeta los filtros activos.
+- 🗺️ **Export a HTML** autocontenido: un `.html` con mapa Leaflet embebido y
+  sólo las canchas que pasan tus filtros, con popups, leyenda y links. Lo
+  abrís en cualquier lado o lo metés en un iframe.
 - 🔒 **Panel admin** en `/admin` para configurar API keys, lanzar syncs
   manuales y monitorear el estado.
 
@@ -99,8 +107,12 @@ SESSION_SECRET=algun-secret-largo-random
 - `GET  /api/admin/settings` — settings privadas (requiere login).
 - `POST /api/admin/settings`.
 - `POST /api/admin/sync/:source` — `osm`, `google` o `zones`.
+- `POST /api/admin/sync-all` — remapeo completo: zonas + OSM + Google + reasignación.
 - `POST /api/admin/reassign-zones` — recalcular qué zona corresponde a cada
   facility por point-in-polygon.
+- `GET  /api/export/xlsx?types=&sizes=&sports=&zones=&q=` — descarga Excel.
+- `GET  /api/export/html?...&inline=1&title=...` — descarga (o previsualiza
+  con `inline=1`) un HTML autocontenido con mapa de los resultados filtrados.
 - `GET  /api/admin/sync/status` — estado actual + estadísticas + últimos
   syncs.
 - `GET  /api/admin/photo?ref=...` — proxy de fotos de Google Places.

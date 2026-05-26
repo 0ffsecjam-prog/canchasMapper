@@ -151,6 +151,23 @@
     }
   }
 
+  async function syncAll() {
+    try {
+      const r = await fetchJson('/api/admin/sync-all', { method: 'POST' });
+      toast(r.message || 'Remapeo iniciado', 'success');
+      const interval = setInterval(async () => {
+        await loadStats();
+        const status = await fetchJson('/api/admin/sync/status');
+        if (!status.running || !status.running.includes('all')) {
+          clearInterval(interval);
+          toast('Remapeo completo terminado', 'success');
+        }
+      }, 5000);
+    } catch (err) {
+      toast('Error: ' + err.message, 'error');
+    }
+  }
+
   async function changePassword() {
     const np = $('#new-password').value;
     if (!np || np.length < 6) {
@@ -170,6 +187,7 @@
     $('#login-form').addEventListener('submit', login);
     $('#logout-btn').addEventListener('click', logout);
     $('#save-settings').addEventListener('click', saveSettings);
+    $('#sync-all').addEventListener('click', syncAll);
     $('#sync-osm').addEventListener('click', () => syncSource('osm'));
     $('#sync-google').addEventListener('click', () => syncSource('google'));
     $('#sync-zones').addEventListener('click', () => syncSource('zones'));

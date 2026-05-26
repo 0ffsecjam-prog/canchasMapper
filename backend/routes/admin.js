@@ -135,6 +135,68 @@ router.post('/sync/:source', requireAuth, async (req, res) => {
   }
 });
 
+// Remapear todo: zonas (si faltan) + OSM + Google (si hay key) + reasignar.
+router.post('/sync-all', requireAuth, async (req, res) => {
+  if (syncRunning['all']) {
+    return res.status(409).json({ error: 'sync_already_running' });
+  }
+  const syncId = logSyncStart('all');
+  syncRunning['all'] = true;
+  res.json({ ok: true, sync_id: syncId, message: 'Remapeo completo iniciado' });
+
+  let added = 0, updated = 0;
+  const steps = [];
+  const countingUpsert = (f) => {
+    const before = db.prepare('SELECT id FROM facilities WHERE source = ? AND source_id = ?').get(f.source, f.source_id);
+    upsertFacility(f);
+    if (before) updated++; else added++;
+  };
+
+  try {
+    // 1) Zonas (siempre refrescamos los límites)
+    try {
+      const rz = await zones.syncZones(db);
+      zonesRoute.invalidateCache();
+      steps.push(`zonas: ${rz.processed}`);
+    } catch (e) {
+      steps.push(`zonas: ERROR (${e.message})`);
+    }
+
+    // 2) OSM
+    try {
+      await osm.syncAMBA(countingUpsert);
+      steps.push('osm: ok');
+    } catch (e) {
+      steps.push(`osm: ERROR (${e.message})`);
+    }
+
+    // 3) Google (sólo si hay key)
+    const key = getSetting('google_places_server_key');
+    if (key) {
+      try {
+        await google.syncAMBA(countingUpsert, { apiKey: key });
+        steps.push('google: ok');
+      } catch (e) {
+        steps.push(`google: ERROR (${e.message})`);
+      }
+    } else {
+      steps.push('google: omitido (sin key)');
+    }
+
+    // 4) Reasignar zonas
+    const r2 = reassignAllZones();
+    steps.push(`reasignación: ${r2.assigned}/${r2.facilities}`);
+
+    logSyncEnd(syncId, 'ok', added, updated, steps.join(' | '));
+    console.log('[sync-all] completado:', steps.join(' | '));
+  } catch (err) {
+    logSyncEnd(syncId, 'error', added, updated, err.message + ' | ' + steps.join(' | '));
+    console.error('[sync-all] error:', err);
+  } finally {
+    delete syncRunning['all'];
+  }
+});
+
 // Reasigna facilities a zonas sin tocar datos
 router.post('/reassign-zones', requireAuth, (req, res) => {
   try {

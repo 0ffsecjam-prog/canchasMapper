@@ -12,6 +12,7 @@
     "express-session": "^1.18.0",
     "better-sqlite3": "^11.3.0",
     "node-fetch": "^2.7.0",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "exceljs": "^4.4.0"
   }
 }

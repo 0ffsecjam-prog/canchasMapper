@@ -211,13 +211,25 @@
     }
   }
 
-  async function loadFacilities() {
+  function buildFilterParams(opts = {}) {
     const params = new URLSearchParams();
     if (state.filters.types.size) params.set('types', Array.from(state.filters.types).join(','));
     if (state.filters.sizes.size) params.set('sizes', Array.from(state.filters.sizes).join(','));
     if (state.filters.sports.size) params.set('sports', Array.from(state.filters.sports).join(','));
     if (state.filters.zones.size) params.set('zones', Array.from(state.filters.zones).join(','));
     if (state.filters.q) params.set('q', state.filters.q);
+    if (opts.includeZoneNames && state.filters.zones.size) {
+      const names = Array.from(state.filters.zones)
+        .map(id => state.zonesById.get(id))
+        .filter(Boolean)
+        .map(z => z.name);
+      if (names.length) params.set('zoneNames', names.join(', '));
+    }
+    return params;
+  }
+
+  async function loadFacilities() {
+    const params = buildFilterParams();
     params.set('limit', '5000');
 
     try {
@@ -441,8 +453,33 @@
     }
   }
 
+  function exportData(format) {
+    const params = buildFilterParams({ includeZoneNames: true });
+    if (format === 'html') {
+      params.set('title', 'canchasMapper · ' + (state.filters.q ? state.filters.q : 'AMBA'));
+    }
+    const url = `/api/export/${format}?${params.toString()}`;
+    // Forzar descarga
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast(`Generando export ${format.toUpperCase()}…`, 'success');
+  }
+
   function bindEvents() {
     $('#map-engine').addEventListener('change', e => setTile(e.target.value));
+
+    $('#export-xlsx').addEventListener('click', () => exportData('xlsx'));
+    $('#export-html').addEventListener('click', () => exportData('html'));
+    $('#export-html-preview').addEventListener('click', () => {
+      const params = buildFilterParams({ includeZoneNames: true });
+      params.set('inline', '1');
+      params.set('title', 'canchasMapper · ' + (state.filters.q ? state.filters.q : 'AMBA'));
+      window.open(`/api/export/html?${params.toString()}`, '_blank');
+    });
 
     $('#show-boundaries').addEventListener('change', e => toggleBoundaries(e.target.checked));
 

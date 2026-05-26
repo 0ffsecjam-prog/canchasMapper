@@ -221,9 +221,31 @@ function buildFacilityWhere(filters = {}) {
   return { whereClause, params };
 }
 
-function listFacilities(filters = {}) {
+function listFacilities(filters = {}, opts = {}) {
   const { whereClause, params } = buildFacilityWhere(filters);
-  const limit = Math.min(parseInt(filters.limit, 10) || 2000, 5000);
+  // Sin tope artificial: por defecto trae todo. Cap alto sólo por seguridad.
+  const limit = Math.min(parseInt(filters.limit, 10) || 1000000, 1000000);
+
+  if (opts.compact) {
+    // Payload liviano para el mapa: sin zonas ni photo_count (subqueries caras).
+    const sql = `
+      SELECT f.id, f.name, f.lat, f.lng, f.type, f.size,
+        (SELECT GROUP_CONCAT(sport) FROM facility_sports WHERE facility_id = f.id) AS sports_csv
+      FROM facilities f
+      ${whereClause}
+      ORDER BY f.id
+      LIMIT ${limit}
+    `;
+    return db.prepare(sql).all(params).map(r => ({
+      id: r.id,
+      name: r.name,
+      lat: r.lat,
+      lng: r.lng,
+      type: r.type,
+      size: r.size,
+      sports: r.sports_csv ? r.sports_csv.split(',') : []
+    }));
+  }
 
   const sql = `
     SELECT f.*,
@@ -259,7 +281,7 @@ function listFacilities(filters = {}) {
 // Para export: incluye zonas separadas por tipo + 1ra foto.
 function listFacilitiesForExport(filters = {}) {
   const { whereClause, params } = buildFacilityWhere(filters);
-  const limit = Math.min(parseInt(filters.limit, 10) || 5000, 20000);
+  const limit = Math.min(parseInt(filters.limit, 10) || 1000000, 1000000);
   const sql = `
     SELECT f.*,
       (SELECT GROUP_CONCAT(sport) FROM facility_sports WHERE facility_id = f.id) AS sports_csv,

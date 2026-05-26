@@ -126,21 +126,8 @@
     state.tileLayer = L.tileLayer(provider.url, provider.options).addTo(state.map);
   }
 
-  function makeIcon(type) {
-    const color = TYPE_COLORS[type] || '#94a3b8';
-    const html = `<div style="
-      width: 14px; height: 14px;
-      background: ${color};
-      border: 2px solid #0f1419;
-      border-radius: 50%;
-      box-shadow: 0 0 0 1px ${color}55, 0 2px 4px rgba(0,0,0,0.5);
-    "></div>`;
-    return L.divIcon({
-      className: 'cm-marker',
-      html,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7]
-    });
+  function typeColor(type) {
+    return TYPE_COLORS[type] || '#94a3b8';
   }
 
   function renderTypeChips() {
@@ -230,16 +217,18 @@
 
   async function loadFacilities() {
     const params = buildFilterParams();
-    params.set('limit', '5000');
+    params.set('compact', '1'); // payload liviano, sin tope: trae TODAS
 
+    $('#count-badge').textContent = 'cargando…';
     try {
       const r = await fetch('/api/facilities?' + params.toString());
       const data = await r.json();
       state.facilities = data.facilities || [];
       renderMarkers();
-      $('#count-badge').textContent = `${data.count.toLocaleString('es-AR')} resultados`;
+      $('#count-badge').textContent = `${data.count.toLocaleString('es-AR')} lugares`;
     } catch (err) {
       toast('Error cargando canchas: ' + err.message, 'error');
+      $('#count-badge').textContent = 'error';
     }
   }
 
@@ -355,8 +344,16 @@
     state.cluster.clearLayers();
     const markers = [];
     for (const f of state.facilities) {
-      const m = L.marker([f.lat, f.lng], { icon: makeIcon(f.type) });
-      m.bindTooltip(buildTooltip(f), { direction: 'top', offset: [0, -8] });
+      if (typeof f.lat !== 'number' || typeof f.lng !== 'number') continue;
+      // circleMarker se renderiza en canvas: soporta decenas de miles de puntos.
+      const m = L.circleMarker([f.lat, f.lng], {
+        radius: 6,
+        fillColor: typeColor(f.type),
+        color: '#0f1419',
+        weight: 1.5,
+        fillOpacity: 0.9
+      });
+      m.bindTooltip(buildTooltip(f), { direction: 'top', offset: [0, -6] });
       m.on('click', () => showDetail(f.id));
       markers.push(m);
     }

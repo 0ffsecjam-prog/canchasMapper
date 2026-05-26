@@ -2,7 +2,7 @@
 const fetch = require('node-fetch');
 const { assembleRings, combinedBBox, simplifyRing } = require('../utils/geo');
 
-const AMBA_BBOX = [-34.92, -58.75, -34.30, -58.25];
+const AMBA_BBOX = [-35.15, -59.55, -34.10, -57.80];
 
 const DEFAULT_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
